@@ -1,0 +1,85 @@
+name: dotnet-nuget
+
+# Reusable pack + publish pipeline. Triggers from a repo's release.yml on a `v*` tag.
+# Versioning is handled by MinVer (reads the nearest vX.Y.Z tag) — do NOT pass -p:Version.
+#
+#   jobs:
+#     publish:
+#       uses: Resurrection-Capsule/.github/.github/workflows/dotnet-nuget.yml@v1
+#       with:
+#         project: src/RakNexus.csproj      # the packable library
+#         solution: RakNexus.sln            # optional: gate on build+test first
+#       secrets: inherit
+
+on:
+  workflow_call:
+    inputs:
+      project:
+        description: The packable library project (.csproj) to pack.
+        required: true
+        type: string
+      solution:
+        description: Optional solution to build+test as a gate before packing (empty = pack project only).
+        required: false
+        type: string
+        default: ''
+      dotnet-version:
+        required: false
+        type: string
+        default: '10.0.x'
+
+env:
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 'true'
+  NuGetPackageSourceCredentials_github: Username=actions;Password=${{ secrets.GITHUB_TOKEN }}
+
+concurrency:
+  group: nuget-${{ github.ref }}
+  cancel-in-progress: false   # never cancel an in-flight publish
+
+jobs:
+  pack-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Resolve build target
+        id: target
+        run: echo "value=${{ inputs.solution != '' && inputs.solution || inputs.project }}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore
+        run: dotnet restore ${{ steps.target.outputs.value }}
+
+      - name: Build
+        run: dotnet build ${{ steps.target.outputs.value }} -c Release --no-restore -p:ContinuousIntegrationBuild=true
+
+      - name: Test
+        if: ${{ inputs.solution != '' }}
+        run: dotnet test ${{ inputs.solution }} -c Release --no-build --verbosity normal
+
+      - name: Pack
+        run: dotnet pack ${{ inputs.project }} -c Release --no-build -p:ContinuousIntegrationBuild=true -o nupkgs
+
+      - name: Push to GitHub Packages
+        run: >-
+          dotnet nuget push "nupkgs/*.nupkg"
+          --source https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
+          --api-key ${{ secrets.GITHUB_TOKEN }}
+          --skip-duplicate
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nuget-package
+          path: nupkgs/*.nupkg
+          if-no-files-found: error
+          retention-days: 14

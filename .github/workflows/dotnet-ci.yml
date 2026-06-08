@@ -1,0 +1,68 @@
+name: dotnet-ci
+
+# Reusable build + test pipeline for any .NET repo in the org.
+# Call it from a repo's .github/workflows/ci.yml:
+#
+#   jobs:
+#     ci:
+#       uses: Resurrection-Capsule/.github/.github/workflows/dotnet-ci.yml@v1
+#       with:
+#         solution: RakNexus.sln
+#       secrets: inherit
+
+on:
+  workflow_call:
+    inputs:
+      solution:
+        description: Solution or project to restore/build/test (empty = let the SDK find it).
+        required: false
+        type: string
+        default: ''
+      test:
+        description: If true, run `dotnet test` after the build.
+        required: false
+        type: boolean
+        default: true
+      dotnet-version:
+        required: false
+        type: string
+        default: '10.0.x'
+
+env:
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 'true'
+  # Auth for restoring org packages from GitHub Packages (no-op when a repo has no org deps).
+  NuGetPackageSourceCredentials_github: Username=actions;Password=${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # MinVer needs full history + tags to compute the version
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.sln', '**/Directory.*.props', '**/Directory.Packages.props') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Restore
+        run: dotnet restore ${{ inputs.solution }}
+
+      - name: Build
+        run: dotnet build ${{ inputs.solution }} -c Release --no-restore
+
+      - name: Test
+        if: ${{ inputs.test }}
+        run: dotnet test ${{ inputs.solution }} -c Release --no-build --verbosity normal

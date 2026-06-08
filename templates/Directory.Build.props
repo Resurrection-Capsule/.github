@@ -1,0 +1,49 @@
+<Project>
+
+  <!-- ============================================================================
+       Org-wide build defaults for Resurrection-Capsule .NET repos.
+       Copy to each repo root. Set per-repo values (RepositoryUrl, and in each
+       packable .csproj: IsPackable, PackageId, Description, PackageTags).
+       Versioning is automatic via MinVer from the nearest `vX.Y.Z` git tag —
+       do NOT add a static <Version>.
+       ============================================================================ -->
+
+  <PropertyGroup>
+    <Authors>Resurrection-Capsule</Authors>
+    <Company>Resurrection-Capsule</Company>
+    <Product>ReCap</Product>
+    <Copyright>Copyright (c) Resurrection-Capsule</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+
+    <!-- TODO per repo: point at the actual repository. -->
+    <RepositoryUrl>https://github.com/Resurrection-Capsule/REPONAME</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Deterministic, source-linked builds with PDBs embedded in the assembly
+         (no separate symbol feed needed — GitHub Packages has no symbol server). -->
+    <Deterministic>true</Deterministic>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <DebugType>embedded</DebugType>
+    <IncludeSymbols>false</IncludeSymbols>
+
+    <!-- MinVer: version = nearest `vX.Y.Z` tag (+ height for untagged commits). -->
+    <MinVerTagPrefix>v</MinVerTagPrefix>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="Exists('$(MSBuildThisFileDirectory)README.md')">
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup Condition="Exists('$(MSBuildThisFileDirectory)README.md')">
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MinVer" Version="5.0.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>
